@@ -595,6 +595,12 @@
                                 <option value="30">30 dias</option>
                             </select>
                         </div>
+                        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-700">
+                            <span>Fornecedor:</span>
+                            <select id="compras-filtro-fornecedor" onchange="aplicarFiltroFornecedorPedido()" class="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold">
+                                <option value="">Todos os Fornecedores</option>
+                            </select>
+                        </div>
                         <button onclick="calcularSugestaoCompras()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-3.5 py-2.5 rounded-xl transition shadow-sm text-xs flex items-center gap-1.5">
                             <i class="fa-solid fa-rotate"></i> Recalcular Giro
                         </button>
@@ -1267,7 +1273,11 @@
             <h3 class="text-lg font-black text-slate-800">Adicionar Item Manual ao Pedido</h3>
             <div class="space-y-3 text-xs">
                 <div>
-                    <label class="block font-bold text-slate-600 uppercase mb-1">Selecionar Produto Cadastrado (ou deixe em branco para avulso)</label>
+                    <label class="block font-bold text-slate-600 uppercase mb-1">Fornecedor</label>
+                    <select id="ped-manual-fornecedor" onchange="filtrarProdutosPedidoManualPorFornecedor()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"></select>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 uppercase mb-1">Selecionar Produto do Estoque</label>
                     <select id="ped-manual-prod-id" onchange="preencherDadosItemManual()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"></select>
                 </div>
                 <div>
@@ -3489,6 +3499,7 @@ Serviço: ${srv ? srv.nome : ''}`);
 
         // ================= PEDIDOS DE COMPRA (EDITÁVEL + MANUAL) =================
         function calcularSugestaoCompras() {
+            popularFiltroFornecedoresPedido();
             const diasAnalise = parseInt(document.getElementById('compras-dias-analise').value) || 10;
             const agora = new Date();
             const limiteData = new Date(agora.getTime() - (diasAnalise * 24 * 60 * 60 * 1000));
@@ -3585,10 +3596,75 @@ Serviço: ${srv ? srv.nome : ''}`);
             renderizarTabelaPedidoEditavel();
         }
 
+        function popularFiltroFornecedoresPedido() {
+            const selFornTopo = document.getElementById('compras-filtro-fornecedor');
+            if (!selFornTopo) return;
+            const valorAtual = selFornTopo.value;
+            const nomesFornecedores = new Set((db.fornecedores || []).map(f => f.nome).filter(Boolean));
+            (db.produtos || []).forEach(p => {
+                if (p.marca && p.marca.trim()) nomesFornecedores.add(p.marca.trim());
+            });
+            selFornTopo.innerHTML = '<option value="">Todos os Fornecedores</option>' +
+                Array.from(nomesFornecedores).map(nome => `<option value="${nome}">${nome}</option>`).join('');
+            if (valorAtual && Array.from(selFornTopo.options).some(o => o.value === valorAtual)) {
+                selFornTopo.value = valorAtual;
+            }
+        }
+
+        function aplicarFiltroFornecedorPedido() {
+            const selFornTopo = document.getElementById('compras-filtro-fornecedor');
+            const fornSel = selFornTopo ? selFornTopo.value : '';
+            if (!fornSel) {
+                calcularSugestaoCompras();
+                return;
+            }
+            const prodsFornecedor = (db.produtos || []).filter(p => (p.marca || '').trim().toLowerCase() === fornSel.trim().toLowerCase());
+            itensPedidoAtual = prodsFornecedor.map(p => ({
+                uidItem: Date.now() + Math.random(),
+                produtoId: p.id,
+                nome: p.nome,
+                marca: p.marca || fornSel,
+                unidade: p.vendeGranel ? 'kg' : p.unidade,
+                estoqueAtual: Number(p.estoque || 0),
+                mediaDiaria: 0,
+                sugeridaSistema: Math.max(1, Number(p.minimo || 5) - Number(p.estoque || 0) > 0 ? Number(p.minimo || 5) - Number(p.estoque || 0) : 1),
+                qtdPedir: Math.max(1, Number(p.minimo || 5) - Number(p.estoque || 0) > 0 ? Number(p.minimo || 5) - Number(p.estoque || 0) : 1),
+                custoUnit: Number(p.custo || 0),
+                manual: true
+            }));
+            renderizarTabelaPedidoEditavel();
+        }
+
+        function filtrarProdutosPedidoManualPorFornecedor() {
+            const selForn = document.getElementById('ped-manual-fornecedor');
+            const selProd = document.getElementById('ped-manual-prod-id');
+            if (!selProd) return;
+            const fornNome = selForn ? selForn.value.trim().toLowerCase() : '';
+            const todosProdutos = db.produtos || [];
+            const filtrados = fornNome
+                ? todosProdutos.filter(p => (p.marca || '').trim().toLowerCase() === fornNome)
+                : todosProdutos;
+            const listaExibir = filtrados.length > 0 ? filtrados : todosProdutos;
+
+            selProd.innerHTML = '<option value="">-- Selecione um item do estoque (ou digite avulso) --</option>' +
+                listaExibir.map(p => `<option value="${p.id}">${p.nome} (${p.marca || 'Sem Fornecedor'}) - Est: ${p.estoque}</option>`).join('');
+        }
+
         function abrirModalItemPedidoManual() {
-            const sel = document.getElementById('ped-manual-prod-id');
-            sel.innerHTML = '<option value="">-- Item Avulso (Digitar nome abaixo) --</option>' +
-                db.produtos.map(p => `<option value="${p.id}">${p.nome} (${p.marca || 'N/D'}) - Est: ${p.estoque}</option>`).join('');
+            const selForn = document.getElementById('ped-manual-fornecedor');
+            const nomesFornecedores = new Set((db.fornecedores || []).map(f => f.nome).filter(Boolean));
+            (db.produtos || []).forEach(p => {
+                if (p.marca && p.marca.trim()) nomesFornecedores.add(p.marca.trim());
+            });
+            const fornTopo = document.getElementById('compras-filtro-fornecedor') ? document.getElementById('compras-filtro-fornecedor').value : '';
+            if (selForn) {
+                selForn.innerHTML = '<option value="">Todos os Fornecedores (Ver todo o estoque)</option>' +
+                    Array.from(nomesFornecedores).map(nome => `<option value="${nome}">${nome}</option>`).join('');
+                if (fornTopo && Array.from(selForn.options).some(o => o.value === fornTopo)) {
+                    selForn.value = fornTopo;
+                }
+            }
+            filtrarProdutosPedidoManualPorFornecedor();
             document.getElementById('ped-manual-nome').value = '';
             document.getElementById('ped-manual-qtd').value = '5';
             document.getElementById('ped-manual-custo').value = '0';
@@ -3599,8 +3675,18 @@ Serviço: ${srv ? srv.nome : ''}`);
         function preencherDadosItemManual() {
             const pid = document.getElementById('ped-manual-prod-id').value;
             if (!pid) return;
-            const p = db.produtos.find(item => item.id == pid);
+            const p = (db.produtos || []).find(item => item.id == pid);
             if (p) {
+                const selForn = document.getElementById('ped-manual-fornecedor');
+                if (selForn && p.marca) {
+                    if (!Array.from(selForn.options).some(o => o.value === p.marca)) {
+                        const opt = document.createElement('option');
+                        opt.value = p.marca;
+                        opt.textContent = p.marca;
+                        selForn.appendChild(opt);
+                    }
+                    selForn.value = p.marca;
+                }
                 document.getElementById('ped-manual-nome').value = p.nome;
                 document.getElementById('ped-manual-custo').value = p.custo || 0;
             }
@@ -3608,7 +3694,8 @@ Serviço: ${srv ? srv.nome : ''}`);
 
         function confirmarItemPedidoManual() {
             const pid = document.getElementById('ped-manual-prod-id').value;
-            const p = pid ? db.produtos.find(item => item.id == pid) : null;
+            const p = pid ? (db.produtos || []).find(item => item.id == pid) : null;
+            const fornEscolhido = document.getElementById('ped-manual-fornecedor') ? document.getElementById('ped-manual-fornecedor').value.trim() : '';
             const nome = document.getElementById('ped-manual-nome').value.trim();
             const qtd = parseFloat(document.getElementById('ped-manual-qtd').value) || 0;
             const custo = parseFloat(document.getElementById('ped-manual-custo').value) || 0;
@@ -3622,7 +3709,7 @@ Serviço: ${srv ? srv.nome : ''}`);
                 uidItem: Date.now() + Math.random(),
                 produtoId: p ? p.id : null,
                 nome,
-                marca: p ? (p.marca || 'N/D') : 'Manual',
+                marca: fornEscolhido || (p ? (p.marca || 'N/D') : 'Manual'),
                 unidade: p ? (p.vendeGranel ? 'kg' : p.unidade) : 'un',
                 estoqueAtual: p ? p.estoque : 0,
                 mediaDiaria: 0,
