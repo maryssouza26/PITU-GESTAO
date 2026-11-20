@@ -2113,9 +2113,7 @@
                 link += `&fb=${encodeURIComponent(masterState.firebaseUrl)}`;
             }
             navigator.clipboard.writeText(link).then(() => {
-                alert('Link de agendamento do cliente copiado!
-
-Envie este link no WhatsApp do cliente. Ele verá os horários livres e os preços desta unidade para agendar.');
+                alert('Link de agendamento do cliente copiado!\n\nEnvie este link no WhatsApp do cliente. Ele verá os horários livres e os preços desta unidade para agendar.');
             }).catch(() => {
                 prompt('Copie o link abaixo para enviar ao cliente:', link);
             });
@@ -2209,11 +2207,7 @@ Envie este link no WhatsApp do cliente. Ele verá os horários livres e os preç
                 } catch (e) {}
             }
 
-            alert(`✅ Agendamento confirmado com sucesso!
-
-Pet: ${pet}
-Data: ${data.split('-').reverse().join('/')} às ${horario}
-Serviço: ${srv ? srv.nome : ''}`);
+            alert(`✅ Agendamento confirmado com sucesso!\n\nPet: ${pet}\nData: ${data.split('-').reverse().join('/')} às ${horario}\nServiço: ${srv ? srv.nome : ''}`);
             carregarHorariosCliente();
             document.getElementById('cli-pet').value = '';
             document.getElementById('cli-obs').value = '';
