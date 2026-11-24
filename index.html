@@ -2401,6 +2401,18 @@
             });
         }
 
+        async function getFirebaseAuthQuery() {
+            try {
+                const user = (window.firebase && firebase.auth) ? firebase.auth().currentUser : null;
+                if (!user) return '';
+                const token = await user.getIdToken();
+                return '?auth=' + encodeURIComponent(token);
+            } catch (e) {
+                console.warn('Nao foi possivel obter token Firebase:', e);
+                return '';
+            }
+        }
+
         async function salvarDadosStorage() {
             masterState.categoriasMargem = { ...CATEGORIAS_MARGEM };
             const uidAtiva = masterState.unidadeAtivaId;
@@ -2412,11 +2424,12 @@
             if (masterState.firebaseUrl) {
                 try {
                     const url = masterState.firebaseUrl.replace(/\/$/, '') + '/pitu_gestao.json' + await getFirebaseAuthQuery();
-                    await fetch(url, {
+                    const resp = await fetch(url, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(masterState)
                     });
+                    if (!resp.ok) throw new Error('Firebase HTTP ' + resp.status + ': ' + await resp.text());
                     atualizarBadgeNuvem(true);
                 } catch (e) {
                     console.warn('Erro ao sincronizar na nuvem:', e);
@@ -2500,11 +2513,35 @@
         }
         function fecharModalFirebase() { document.getElementById('modal-firebase').classList.add('hidden'); }
         async function salvarConfigFirebase() {
-            const url = document.getElementById('firebase-db-url').value.trim();
+            const url = document.getElementById('firebase-db-url').value.trim().replace(/\/$/, '');
             masterState.firebaseUrl = url;
-            await salvarDadosStorage();
-            fecharModalFirebase();
-            alert(url ? 'Conectado ao Firebase! Agora suas unidades sincronizam na nuvem.' : 'Modo local ativado.');
+            if (!url) {
+                localStorage.setItem('pitu_gestao_master_v2', JSON.stringify(masterState));
+                atualizarBadgeNuvem(false);
+                fecharModalFirebase();
+                alert('Modo local ativado.');
+                return;
+            }
+            try {
+                const authQuery = await getFirebaseAuthQuery();
+                if (!authQuery) throw new Error('Usuario nao autenticado no Firebase.');
+                const testeUrl = url + '/pitu_gestao.json' + authQuery;
+                const resp = await fetch(testeUrl, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(masterState)
+                });
+                if (!resp.ok) throw new Error('Firebase HTTP ' + resp.status + ': ' + await resp.text());
+                localStorage.setItem('pitu_gestao_master_v2', JSON.stringify(masterState));
+                atualizarBadgeNuvem(true);
+                fecharModalFirebase();
+                alert('Conectado ao Firebase com sucesso! Nuvem sincronizada.');
+            } catch (e) {
+                console.error('Falha ao conectar Firebase:', e);
+                localStorage.setItem('pitu_gestao_master_v2', JSON.stringify(masterState));
+                atualizarBadgeNuvem(false);
+                alert('Nao foi possivel conectar ao Firebase. O sistema continua salvo localmente. Detalhe: ' + e.message);
+            }
         }
         async function sincronizarAgoraFirebase() {
             if (!masterState.firebaseUrl) {
