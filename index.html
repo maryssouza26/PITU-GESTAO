@@ -412,6 +412,12 @@
                         <button onclick="exportarPlanilhaExemplo()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2 text-sm">
                             <i class="fa-solid fa-file-excel text-rose-700"></i> Planilha Modelo
                         </button>
+                        <button onclick="exportarProdutosExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white font-semibold px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2 text-sm">
+                            <i class="fa-solid fa-file-excel"></i> Exportar Produtos Excel
+                        </button>
+                        <button onclick="exportarProdutosPDF()" class="bg-rose-900 hover:bg-rose-800 text-amber-200 font-semibold px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2 text-sm">
+                            <i class="fa-solid fa-file-pdf"></i> Exportar Produtos PDF
+                        </button>
                         <label class="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-semibold px-4 py-2.5 rounded-xl transition shadow-sm cursor-pointer flex items-center gap-2 text-sm">
                             <i class="fa-solid fa-file-arrow-up"></i> Importar Excel
                             <input type="file" id="file-excel" class="hidden" accept=".xlsx, .xls, .csv" onchange="importarPlanilhaExcel(event)">
@@ -630,6 +636,9 @@
                         <button onclick="gerarTextoPedidoWhatsApp()" class="bg-rose-800 hover:bg-rose-700 text-amber-200 font-black px-4 py-2.5 rounded-xl transition shadow-sm text-xs flex items-center gap-1.5">
                             <i class="fa-brands fa-whatsapp text-base"></i> Copiar Pedido Editado
                         </button>
+                        <button onclick="finalizarPedidoCompra()" class="bg-emerald-700 hover:bg-emerald-600 text-white font-black px-4 py-2.5 rounded-xl transition shadow-sm text-xs flex items-center gap-1.5">
+                            <i class="fa-solid fa-check"></i> Finalizar e Salvar Pedido
+                        </button>
                     </div>
                 </div>
 
@@ -658,6 +667,15 @@
                 </div>
             </section>
 
+                </div>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+                        <div><h3 class="font-bold text-slate-800">Histórico de Pedidos</h3><p class="text-xs text-slate-500">Pedidos finalizados e sincronizados na nuvem.</p></div>
+                        <span id="pedidos-historico-qtd" class="text-xs font-black bg-amber-100 text-amber-950 px-3 py-1.5 rounded-lg">0 pedido(s)</span>
+                    </div>
+                    <div id="lista-historico-pedidos" class="divide-y divide-slate-100"></div>
+                </div>
+            </section>
             <!-- ================= ABA: FORNECEDORES & ENTRADA DE COMPRA EM LOTE ================= -->
             <section id="conteudo-fornecedores" class="tab-conteudo hidden space-y-6">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-4">
@@ -1312,6 +1330,12 @@
                     <div>
                         <label class="block font-bold text-slate-600 uppercase mb-1">Custo Unit. Estimado (R$)</label>
                         <input type="number" step="0.01" id="ped-manual-custo" value="0" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block font-bold text-slate-600 uppercase mb-1">Forma de Solicitação</label>
+                        <select id="ped-manual-unidade-pedido" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+                            <option value="Unidade">Unidade</option><option value="Fardo">Fardo</option><option value="Caixa">Caixa</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -2313,6 +2337,7 @@
                 configMaquininha: { debito: 1.99, creditoVista: 3.49, creditoParc: 4.99, creditoParc12: 6.49 },
                 fornecedores: [],
                 comprasFornecedores: [],
+                pedidosCompra: [],
                 agendaServicos: [
                     { id: 1, nome: 'Banho Completo (Porte Pequeno)', preco: 45.00 },
                     { id: 2, nome: 'Banho + Tosa Higiênica (Porte Pequeno)', preco: 55.00 },
@@ -2350,9 +2375,12 @@
         };
 
         function getHojeISO() {
-            const now = new Date();
-            const offset = now.getTimezoneOffset() * 60000;
-            return new Date(now - offset).toISOString().split('T')[0];
+            return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        }
+        function agoraISO() { return new Date().toISOString(); }
+        function formatarDataHoraSP(valor) {
+            if (!valor) return '';
+            return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }).format(new Date(valor));
         }
 
         function clonarEstruturaUnidade() {
@@ -2381,6 +2409,7 @@
             if (!Array.isArray(u.insumos)) u.insumos = [];
             if (!Array.isArray(u.fornecedores)) u.fornecedores = [];
             if (!Array.isArray(u.comprasFornecedores)) u.comprasFornecedores = [];
+            if (!Array.isArray(u.pedidosCompra)) u.pedidosCompra = [];
             if (!Array.isArray(u.agendaServicos)) u.agendaServicos = clonarEstruturaUnidade().agendaServicos;
             if (!Array.isArray(u.agendaHorarios)) u.agendaHorarios = clonarEstruturaUnidade().agendaHorarios;
             if (!Array.isArray(u.agendamentos)) u.agendamentos = [];
@@ -2603,6 +2632,7 @@
             renderizarAgendas();
             renderizarFornecedores();
             calcularSugestaoCompras();
+            renderizarHistoricoPedidos();
             aplicarVisualSalvo();
             renderizarRelatorios();
         }
@@ -2694,7 +2724,7 @@
             if(abaId === 'estoque') atualizarResumoEstoque();
             if(abaId === 'caixa') { mudarAba('vendas'); setTimeout(() => { const el = document.getElementById('pdv-resumo-vendas-box'); if(el) el.scrollIntoView({ behavior: 'smooth' }); }, 80); }
             if(abaId === 'insumos') renderizarInsumos();
-            if(abaId === 'compras') calcularSugestaoCompras();
+            if(abaId === 'compras') { calcularSugestaoCompras(); renderizarHistoricoPedidos(); }
             if(abaId === 'fornecedores') renderizarFornecedores();
             if(abaId === 'agendas') renderizarAgendas();
             if(abaId === 'financeiro') { renderizarFinanceiro(); gerarRelatorioFinanceiroEmTela(); if(subAlvo) mudarSubAbaFinanceiro(subAlvo); }
@@ -3606,7 +3636,8 @@ Serviço: ${srv ? srv.nome : ''}`);
                         sugeridaSistema: qtdFinal,
                         qtdPedir: qtdFinal,
                         custoUnit: Number(p.custo || 0),
-                        manual: false
+                        manual: false,
+                        unidadePedido: 'Unidade'
                     });
                 }
             });
@@ -3640,11 +3671,11 @@ Serviço: ${srv ? srv.nome : ''}`);
                     <td class="p-4 text-slate-600">${it.manual ? '-' : it.mediaDiaria.toFixed(2) + '/dia'}</td>
                     <td class="p-4 text-slate-500">${it.manual ? 'Manual' : it.sugeridaSistema + ' ' + it.unidade}</td>
                     <td class="p-4">
-                        <input type="number" step="1" min="0" value="${it.qtdPedir}" onchange="atualizarQtdItemPedido(${idx}, this.value)" class="w-24 px-3 py-1.5 bg-amber-50 border border-amber-400 rounded-xl font-black text-rose-900 text-sm">
+                        <div class="flex gap-1"><input type="number" step="1" min="0" value="${it.qtdPedir}" onchange="atualizarQtdItemPedidoPorUid('${it.uidItem}', this.value)" class="w-20 px-2 py-1.5 bg-amber-50 border border-amber-400 rounded-xl font-black text-rose-900 text-sm"><select onchange="atualizarUnidadeItemPedido('${it.uidItem}',this.value)" class="px-2 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold"><option ${it.unidadePedido==='Unidade'?'selected':''}>Unidade</option><option ${it.unidadePedido==='Fardo'?'selected':''}>Fardo</option><option ${it.unidadePedido==='Caixa'?'selected':''}>Caixa</option></select></div>
                     </td>
                     <td class="p-4 font-black text-slate-900">R$ ${(Number(it.qtdPedir) * Number(it.custoUnit)).toFixed(2)}</td>
                     <td class="p-4 text-center">
-                        <button onclick="removerItemPedido(${idx})" class="text-rose-600 hover:text-rose-800 p-1.5"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="removerItemPedidoPorUid('${it.uidItem}')" class="text-rose-600 hover:text-rose-800 p-1.5"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 </tr>
             `).join('');
@@ -3694,7 +3725,8 @@ Serviço: ${srv ? srv.nome : ''}`);
                 sugeridaSistema: Math.max(1, Number(p.minimo || 5) - Number(p.estoque || 0) > 0 ? Number(p.minimo || 5) - Number(p.estoque || 0) : 1),
                 qtdPedir: Math.max(1, Number(p.minimo || 5) - Number(p.estoque || 0) > 0 ? Number(p.minimo || 5) - Number(p.estoque || 0) : 1),
                 custoUnit: Number(p.custo || 0),
-                manual: true
+                manual: true,
+                unidadePedido: 'Unidade'
             }));
             renderizarTabelaPedidoEditavel();
         }
@@ -3763,6 +3795,7 @@ Serviço: ${srv ? srv.nome : ''}`);
             const nome = document.getElementById('ped-manual-nome').value.trim();
             const qtd = parseFloat(document.getElementById('ped-manual-qtd').value) || 0;
             const custo = parseFloat(document.getElementById('ped-manual-custo').value) || 0;
+            const unidadePedido = document.getElementById('ped-manual-unidade-pedido').value || 'Unidade';
 
             if (!nome || qtd <= 0) {
                 alert('Informe o nome do produto e a quantidade.');
@@ -3787,6 +3820,47 @@ Serviço: ${srv ? srv.nome : ''}`);
             renderizarTabelaPedidoEditavel();
         }
 
+        function atualizarQtdItemPedidoPorUid(uid, novaQtd) {
+            const it = itensPedidoAtual.find(x => String(x.uidItem) === String(uid));
+            if (it) { it.qtdPedir = Math.max(0, parseFloat(novaQtd) || 0); renderizarTabelaPedidoEditavel(); }
+        }
+        function atualizarUnidadeItemPedido(uid, unidade) {
+            const it = itensPedidoAtual.find(x => String(x.uidItem) === String(uid));
+            if (it) { it.unidadePedido = unidade; renderizarTabelaPedidoEditavel(); }
+        }
+        function removerItemPedidoPorUid(uid) {
+            const antes = itensPedidoAtual.length;
+            itensPedidoAtual = itensPedidoAtual.filter(x => String(x.uidItem) !== String(uid));
+            if (itensPedidoAtual.length === antes) alert('Não foi possível localizar o item.');
+            renderizarTabelaPedidoEditavel();
+        }
+        function finalizarPedidoCompra() {
+            const itens = itensPedidoAtual.filter(i => Number(i.qtdPedir) > 0).map(i => ({...i}));
+            if (!itens.length) { alert('Inclua pelo menos um item com quantidade maior que zero.'); return; }
+            if (!Array.isArray(db.pedidosCompra)) db.pedidosCompra = [];
+            const fornecedorFiltro = document.getElementById('compras-filtro-fornecedor').value || 'Diversos fornecedores';
+            const total = itens.reduce((a,i)=>a+Number(i.qtdPedir||0)*Number(i.custoUnit||0),0);
+            db.pedidosCompra.unshift({ id: Date.now(), numero: 'PED-' + String(Date.now()).slice(-6), data: agoraISO(), fornecedor: fornecedorFiltro, status: 'Realizado', itens, total });
+            salvarDadosStorage();
+            renderizarHistoricoPedidos();
+            alert('Pedido salvo no histórico e sincronizado na nuvem.');
+        }
+        function renderizarHistoricoPedidos() {
+            const box=document.getElementById('lista-historico-pedidos'), badge=document.getElementById('pedidos-historico-qtd');
+            if(!box) return;
+            const lista=db.pedidosCompra||[];
+            if(badge) badge.textContent=`${lista.length} pedido(s)`;
+            box.innerHTML=lista.length?lista.map(p=>`<div class="p-4 flex flex-wrap justify-between gap-3"><div><strong class="text-rose-900">${p.numero||('PED-'+p.id)}</strong><span class="block text-xs text-slate-500">${formatarDataHoraSP(p.data)} • ${p.fornecedor||'Fornecedor'}</span><span class="block text-xs text-slate-700 mt-1">${(p.itens||[]).map(i=>`${i.qtdPedir} ${i.unidadePedido||i.unidade||'Unidade'} de ${i.nome}`).join(' • ')}</span></div><div class="flex items-center gap-2"><select onchange="alterarStatusPedido('${p.id}',this.value)" class="text-xs border rounded-lg px-2 py-1"><option ${p.status==='Pendente'?'selected':''}>Pendente</option><option ${p.status==='Realizado'?'selected':''}>Realizado</option><option ${p.status==='Recebido'?'selected':''}>Recebido</option><option ${p.status==='Cancelado'?'selected':''}>Cancelado</option></select><button onclick="exportarPedidoPDF('${p.id}')" class="text-xs bg-rose-900 text-amber-200 px-3 py-1.5 rounded-lg font-bold">PDF</button><button onclick="excluirPedidoHistorico('${p.id}')" class="text-rose-600 p-2" title="Excluir pedido"><i class="fa-solid fa-trash"></i></button></div></div>`).join(''):'<p class="p-6 text-center text-slate-400 text-sm">Nenhum pedido salvo no histórico.</p>';
+        }
+        function alterarStatusPedido(id,status){const p=(db.pedidosCompra||[]).find(x=>String(x.id)===String(id));if(p){p.status=status;salvarDadosStorage();renderizarHistoricoPedidos();}}
+        function excluirPedidoHistorico(id){if(!confirm('Excluir este pedido do histórico?'))return;db.pedidosCompra=(db.pedidosCompra||[]).filter(x=>String(x.id)!==String(id));salvarDadosStorage();renderizarHistoricoPedidos();}
+        function exportarPedidoPDF(id){
+            const p=(db.pedidosCompra||[]).find(x=>String(x.id)===String(id));if(!p)return;
+            const un=masterState.unidades.find(u=>u.id===masterState.unidadeAtivaId);
+            const linhas=(p.itens||[]).map(i=>`<tr><td>${i.nome}</td><td>${i.marca||''}</td><td>${i.qtdPedir}</td><td>${i.unidadePedido||i.unidade||'Unidade'}</td><td>R$ ${Number(i.custoUnit||0).toFixed(2)}</td><td>R$ ${(Number(i.qtdPedir||0)*Number(i.custoUnit||0)).toFixed(2)}</td></tr>`).join('');
+            const w=window.open('','_blank');if(!w){alert('Permita pop-ups para gerar o PDF.');return;}
+            w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${p.numero}</title><style>body{font-family:Arial;padding:24px;color:#1e293b}h1{color:#881337}table{width:100%;border-collapse:collapse}th{background:#881337;color:#fef3c7}th,td{padding:8px;border:1px solid #cbd5e1;text-align:left}.total{text-align:right;font-size:18px;font-weight:bold;margin-top:12px}</style></head><body><h1>${masterState.configVisual.nomeLoja||'Casa de Rações Pitú'} - Pedido de Compra</h1><p><strong>${p.numero}</strong> • ${formatarDataHoraSP(p.data)}<br>Unidade: ${un?un.nome:'Principal'}<br>Fornecedor: ${p.fornecedor}<br>Status: ${p.status}</p><table><thead><tr><th>Produto</th><th>Fornecedor</th><th>Qtd.</th><th>Embalagem</th><th>Custo</th><th>Subtotal</th></tr></thead><tbody>${linhas}</tbody></table><div class="total">Total estimado: R$ ${Number(p.total||0).toFixed(2)}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
+        }
         function gerarTextoPedidoWhatsApp() {
             const validos = itensPedidoAtual.filter(i => Number(i.qtdPedir) > 0);
             if (validos.length === 0) {
@@ -3801,7 +3875,7 @@ Serviço: ${srv ? srv.nome : ''}`);
 `;
 
             validos.forEach(i => {
-                texto += `• *${i.nome}* (${i.marca}) — *Pedir: ${i.qtdPedir} ${i.unidade}*
+                texto += `• *${i.nome}* (${i.marca}) — *Pedir: ${i.qtdPedir} ${i.unidadePedido || i.unidade}*
 `;
             });
             texto += `
@@ -4189,9 +4263,7 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
             const nf = document.getElementById('comp-forn-nf').value.trim();
             const lancarFin = document.getElementById('comp-lancar-financeiro').checked;
 
-            const now = new Date();
-            const offset = now.getTimezoneOffset() * 60000;
-            const dataLocalISO = new Date(now - offset).toISOString();
+            const dataLocalISO = agoraISO();
 
             let totalCompra = 0;
 
@@ -4588,7 +4660,7 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
             const saiuDoCaixa = document.getElementById('gasto-saiu-caixa').checked;
             if (!descricao || valor <= 0) { alert('Informe descrição e valor.'); return; }
             const now = new Date();
-            const dataLocalISO = new Date(now - now.getTimezoneOffset() * 60000).toISOString();
+            const dataLocalISO = agoraISO();
             db.despesas.unshift({ id: Date.now(), data: dataLocalISO, descricao, categoria, valor, saiuDoCaixa });
             salvarDadosStorage();
             fecharModalGastoPDV();
@@ -4834,7 +4906,7 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
             const sim = calcularDetalheTaxaPDV(totalBase, formaPagamentoAtual);
             const total = sim.valorCobradoCliente;
             const now = new Date();
-            const dataLocalISO = new Date(now - now.getTimezoneOffset() * 60000).toISOString();
+            const dataLocalISO = agoraISO();
 
             carrinho.forEach(item => {
                 const prod = db.produtos.find(p => p.id === item.produtoId);
@@ -5117,7 +5189,7 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
                 const fornNome = (document.getElementById('prod-bol-fornecedor') && document.getElementById('prod-bol-fornecedor').value) || obj.marca || 'Fornecedor';
                 const nfProd = document.getElementById('prod-bol-nf') ? document.getElementById('prod-bol-nf').value.trim() : '';
                 const boletosProd = construirListaBoletosProduto();
-                const nowIso = new Date().toISOString();
+                const nowIso = agoraISO();
                 boletosProd.forEach(bg => {
                     db.boletos.push({
                         id: Date.now() + Math.random(),
@@ -5543,7 +5615,7 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
                 }
             }
 
-            const nowIso = new Date().toISOString();
+            const nowIso = agoraISO();
             db.movimentos.unshift({
                 id: Date.now(),
                 data: nowIso,
@@ -5649,8 +5721,9 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
                 const numeroVenda = idx + 1;
                 const itensResumo = (v.itens || []).map(it => `${it.qtd}x ${it.nome}`).join(', ') || 'Item';
                 const dtObj = new Date(v.data);
-                const diaMes = dtObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-                const horaMin = dtObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const partesSP = formatarDataHoraSP(v.data).split(', ');
+                const diaMes = (partesSP[0] || '').slice(0,5);
+                const horaMin = partesSP[1] || '';
                 return `
                     <div class="px-4 py-3 bg-white hover:bg-slate-50 flex flex-wrap justify-between items-center gap-3 text-xs">
                         <div class="flex flex-wrap items-center gap-2 text-slate-800">
@@ -5680,7 +5753,7 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
             document.getElementById('cnf-nome-loja').textContent = masterState.configVisual.nomeLoja || 'Casa de Rações Pitú';
             document.getElementById('cnf-unidade').textContent = `Unidade: ${unObj ? unObj.nome : 'Principal'}`;
             document.getElementById('cnf-numero-venda').textContent = `Venda ${numeroVenda}`;
-            document.getElementById('cnf-data-hora').textContent = new Date(venda.data).toLocaleString('pt-BR');
+            document.getElementById('cnf-data-hora').textContent = formatarDataHoraSP(venda.data);
             document.getElementById('cnf-pagamento').textContent = venda.detalhePagamento || venda.pagamento;
             document.getElementById('cnf-total').textContent = `R$ ${Number(venda.total).toFixed(2)}`;
 
@@ -6397,6 +6470,14 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
         function exportarRelatorioEstoqueExcel() {
             const ws = XLSX.utils.json_to_sheet(db.produtos);
             const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Estoque"); XLSX.writeFile(wb, "estoque_pitu.xlsx");
+        }
+        function dadosExportacaoProdutos() {
+            const un=masterState.unidades.find(u=>u.id===masterState.unidadeAtivaId);
+            return (db.produtos||[]).map(p=>({Unidade_Loja:un?un.nome:'Principal',Codigo:p.codigo||'',Codigo_Barras:p.barras||'',Produto:p.nome||'',Categoria:p.categoria||'',Fornecedor:p.marca||'',Unidade:p.vendeGranel?'KG':(p.vendeUnidadeFardo?'UN':p.unidade),Estoque:Number(p.estoque||0),Estoque_Minimo:Number(p.minimo||0),Custo:Number(p.custo||0),Preco_Venda:Number(p.preco||0),Preco_KG:Number(p.precoKg||0),Preco_Unidade_Fardo:Number(p.precoUnFardo||0),Margem_Pct:Number(p.margem||0)}));
+        }
+        function exportarProdutosExcel(){const dados=dadosExportacaoProdutos();const ws=XLSX.utils.json_to_sheet(dados.length?dados:[{Aviso:'Nenhum produto cadastrado'}]);ws['!cols']=[18,14,16,40,22,25,12,12,14,14,14,14,18,12].map(w=>({wch:w}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Produtos');XLSX.writeFile(wb,`produtos_pitu_${masterState.unidadeAtivaId}_${getHojeISO()}.xlsx`);}
+        function exportarProdutosPDF(){
+            const dados=dadosExportacaoProdutos(),un=masterState.unidades.find(u=>u.id===masterState.unidadeAtivaId);const linhas=dados.map(x=>`<tr><td>${x.Codigo}</td><td>${x.Produto}</td><td>${x.Categoria}</td><td>${x.Fornecedor}</td><td>${x.Estoque} ${x.Unidade}</td><td>R$ ${x.Custo.toFixed(2)}</td><td>R$ ${x.Preco_Venda.toFixed(2)}</td></tr>`).join('');const w=window.open('','_blank');if(!w){alert('Permita pop-ups para gerar o PDF.');return;}w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Produtos</title><style>body{font-family:Arial;padding:20px;color:#1e293b}h1{color:#881337}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#881337;color:#fef3c7}th,td{padding:6px;border:1px solid #cbd5e1;text-align:left}</style></head><body><h1>${masterState.configVisual.nomeLoja||'Casa de Rações Pitú'} - Produtos</h1><p>Unidade: ${un?un.nome:'Principal'} • Emitido em ${formatarDataHoraSP(agoraISO())} • ${dados.length} produto(s)</p><table><thead><tr><th>Código</th><th>Produto</th><th>Categoria</th><th>Fornecedor</th><th>Estoque</th><th>Custo</th><th>Venda</th></tr></thead><tbody>${linhas||'<tr><td colspan="7">Nenhum produto cadastrado.</td></tr>'}</tbody></table><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
         }
         function exportarPlanilhaExemplo() {
             const ws = XLSX.utils.json_to_sheet([{ Código: "PITU-01", Nome: "Ração Quatree 15kg", Categoria: "Rações", Marca: "Quatree", Custo: 110, Margem: 30, Preço: 143.90, Unidade: "UN", Estoque: 10, Mínimo: 3 }]);
