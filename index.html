@@ -2439,55 +2439,52 @@
         }
 
         async function carregarDadosStorage() {
-            // 1. Carrega local primeiro
+            // Carrega a copia local apenas como contingencia.
             const savedMaster = localStorage.getItem('pitu_gestao_master_v2');
             if (savedMaster) {
-                masterState = JSON.parse(savedMaster);
+                try { masterState = JSON.parse(savedMaster); } catch (e) { console.warn('Copia local invalida:', e); }
             } else {
-                // Migra dados antigos apenas para Tavares de Melo se existirem
                 const legacy = localStorage.getItem('pitu_gestao_db');
                 if (legacy) {
-                    const parsedLegacy = JSON.parse(legacy);
-                    masterState.dadosPorUnidade['tavares'] = { ...clonarEstruturaUnidade(), ...parsedLegacy };
+                    try { masterState.dadosPorUnidade['tavares'] = { ...clonarEstruturaUnidade(), ...JSON.parse(legacy) }; } catch (e) {}
                 }
             }
 
-            // Garante que cada unidade padrão exista isolada sem herdar dados de outra
-            (masterState.unidades || []).forEach(u => {
-                garantirUnidadeInicializada(u.id);
-            });
-
-            // 2. Se houver URL do Firebase configurada (ou passada via URL), busca dados atualizados da nuvem
+            // A URL oficial faz parte da configuracao do app e funciona em aparelhos novos.
             const urlParams = new URLSearchParams(window.location.search);
             const fbParam = urlParams.get('fb');
-            if (fbParam) {
-                masterState.firebaseUrl = decodeURIComponent(fbParam);
+            if (fbParam) masterState.firebaseUrl = decodeURIComponent(fbParam);
+            if (!masterState.firebaseUrl && typeof PITU_FIREBASE_CONFIG !== 'undefined') {
+                masterState.firebaseUrl = PITU_FIREBASE_CONFIG.databaseURL || '';
             }
 
+            // Com usuario autenticado, a nuvem e a fonte principal.
             if (masterState.firebaseUrl) {
                 try {
-                    const url = masterState.firebaseUrl.replace(/\/$/, '') + '/pitu_gestao.json' + await getFirebaseAuthQuery();
-                    const resp = await fetch(url);
-                    if (resp.ok) {
-                        const cloudData = await resp.json();
-                        if (cloudData && cloudData.unidades) {
-                            const unidadeAtualLocal = masterState.unidadeAtivaId;
-                            masterState = cloudData;
-                            if (masterState.unidades.some(u => u.id === unidadeAtualLocal)) {
-                                masterState.unidadeAtivaId = unidadeAtualLocal;
-                            }
-                            localStorage.setItem('pitu_gestao_master_v2', JSON.stringify(masterState));
-                            Object.keys(masterState.dadosPorUnidade || {}).forEach(k => {
-                                localStorage.setItem('pitu_gestao_unidade_' + k, JSON.stringify(masterState.dadosPorUnidade[k]));
-                            });
-                        }
+                    const authQuery = await getFirebaseAuthQuery();
+                    if (!authQuery) throw new Error('Usuario nao autenticado.');
+                    const url = masterState.firebaseUrl.replace(/\/$/, '') + '/pitu_gestao.json' + authQuery;
+                    const resp = await fetch(url, { cache: 'no-store' });
+                    if (!resp.ok) throw new Error('Firebase HTTP ' + resp.status + ': ' + await resp.text());
+                    const cloudData = await resp.json();
+                    if (cloudData && cloudData.unidades && cloudData.dadosPorUnidade) {
+                        masterState = cloudData;
+                        masterState.firebaseUrl = PITU_FIREBASE_CONFIG.databaseURL;
+                        localStorage.setItem('pitu_gestao_master_v2', JSON.stringify(masterState));
+                        Object.keys(masterState.dadosPorUnidade || {}).forEach(k => {
+                            localStorage.setItem('pitu_gestao_unidade_' + k, JSON.stringify(masterState.dadosPorUnidade[k]));
+                        });
                         atualizarBadgeNuvem(true);
+                    } else {
+                        atualizarBadgeNuvem(false);
                     }
                 } catch (e) {
+                    console.warn('Nao foi possivel baixar a nuvem:', e);
                     atualizarBadgeNuvem(false);
                 }
             }
 
+            (masterState.unidades || []).forEach(u => garantirUnidadeInicializada(u.id));
             sincronizarCategoriasComMaster();
             db = garantirUnidadeInicializada(masterState.unidadeAtivaId);
         }
@@ -2508,53 +2505,63 @@
         }
 
         function abrirModalFirebase() {
-            document.getElementById('firebase-db-url').value = masterState.firebaseUrl || '';
+            document.getElementById('firebase-db-url').value = masterState.firebaseUrl || PITU_FIREBASE_CONFIG.databaseURL;
             document.getElementById('modal-firebase').classList.remove('hidden');
         }
         function fecharModalFirebase() { document.getElementById('modal-firebase').classList.add('hidden'); }
         async function salvarConfigFirebase() {
-            const url = document.getElementById('firebase-db-url').value.trim().replace(/\/$/, '');
+            const url = document.getElementById('firebase-db-url').value.trim().replace(/\/$/, '') || PITU_FIREBASE_CONFIG.databaseURL;
             masterState.firebaseUrl = url;
-            if (!url) {
-                localStorage.setItem('pitu_gestao_master_v2', JSON.stringify(masterState));
-                atualizarBadgeNuvem(false);
-                fecharModalFirebase();
-                alert('Modo local ativado.');
-                return;
-            }
             try {
                 const authQuery = await getFirebaseAuthQuery();
                 if (!authQuery) throw new Error('Usuario nao autenticado no Firebase.');
-                const testeUrl = url + '/pitu_gestao.json' + authQuery;
-                const resp = await fetch(testeUrl, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(masterState)
-                });
-                if (!resp.ok) throw new Error('Firebase HTTP ' + resp.status + ': ' + await resp.text());
-                localStorage.setItem('pitu_gestao_master_v2', JSON.stringify(masterState));
+                const endpoint = url + '/pitu_gestao.json' + authQuery;
+                const leitura = await fetch(endpoint, { cache: 'no-store' });
+                if (!leitura.ok) throw new Error('Firebase HTTP ' + leitura.status + ': ' + await leitura.text());
+                const cloudData = await leitura.json();
+
+                if (cloudData && cloudData.unidades && cloudData.dadosPorUnidade) {
+                    // Nunca sobrescreve uma nuvem existente com dados locais de aparelho novo.
+                    masterState = cloudData;
+                    masterState.firebaseUrl = url;
+                    localStorage.setItem('pitu_gestao_master_v2', JSON.stringify(masterState));
+                    Object.keys(masterState.dadosPorUnidade || {}).forEach(k => {
+                        localStorage.setItem('pitu_gestao_unidade_' + k, JSON.stringify(masterState.dadosPorUnidade[k]));
+                    });
+                    sincronizarCategoriasComMaster();
+                    db = garantirUnidadeInicializada(masterState.unidadeAtivaId);
+                    recarregarTodaInterfaceUnidade();
+                } else {
+                    // Somente cria a base quando a nuvem estiver realmente vazia.
+                    const gravacao = await fetch(endpoint, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(masterState)
+                    });
+                    if (!gravacao.ok) throw new Error('Firebase HTTP ' + gravacao.status + ': ' + await gravacao.text());
+                }
                 atualizarBadgeNuvem(true);
                 fecharModalFirebase();
-                alert('Conectado ao Firebase com sucesso! Nuvem sincronizada.');
+                alert('Conectado! Os dados mais recentes da nuvem foram carregados neste aparelho.');
             } catch (e) {
                 console.error('Falha ao conectar Firebase:', e);
-                localStorage.setItem('pitu_gestao_master_v2', JSON.stringify(masterState));
                 atualizarBadgeNuvem(false);
-                alert('Nao foi possivel conectar ao Firebase. O sistema continua salvo localmente. Detalhe: ' + e.message);
+                alert('Nao foi possivel conectar ao Firebase. Detalhe: ' + e.message);
             }
         }
+
         async function sincronizarAgoraFirebase() {
-            if (!masterState.firebaseUrl) {
-                alert('Informe a URL do Firebase primeiro.');
-                return;
-            }
+            if (!masterState.firebaseUrl) masterState.firebaseUrl = PITU_FIREBASE_CONFIG.databaseURL;
             await carregarDadosStorage();
             recarregarTodaInterfaceUnidade();
             fecharModalFirebase();
-            alert('Dados atualizados da nuvem com sucesso!');
+            if (document.getElementById('badge-nuvem').textContent.includes('Sincronizada')) {
+                alert('Dados mais recentes puxados da nuvem com sucesso!');
+            } else {
+                alert('Nao foi possivel atualizar pela nuvem. A copia local foi mantida.');
+            }
         }
 
-        // ================= INICIALIZAÇÃO =================
         async function inicializarAplicacaoAutenticada() {
             await carregarDadosStorage();
 
@@ -6477,6 +6484,13 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
           document.getElementById('btn-mostrar-senha').addEventListener('click',()=>{const e=document.getElementById('login-senha');e.type=e.type==='password'?'text':'password';});
           document.getElementById('btn-redefinir-senha').addEventListener('click',async()=>{const email=document.getElementById('login-email').value.trim();if(!email){mostrarErroLogin('Informe o e-mail.');return;}try{await firebase.auth().sendPasswordResetEmail(email);alert('E-mail de redefinição enviado.');}catch(x){mostrarErroLogin(mensagemErroAuth(x.code));}});
           window.addEventListener('load',iniciarAuthPitu);
+        document.addEventListener('visibilitychange', async () => {
+            if (!document.hidden && firebase.auth().currentUser && appInicializadoAposLogin) {
+                await carregarDadosStorage();
+                recarregarTodaInterfaceUnidade();
+            }
+        });
+
 
 </script>
 
