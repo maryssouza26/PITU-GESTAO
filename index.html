@@ -17,8 +17,27 @@
             #area-impressao-fechamento { position: absolute; left: 0; top: 0; width: 100%; }
         }
     </style>
+
+    <!-- Firebase Authentication -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script>
+      const PITU_FIREBASE_CONFIG={apiKey:"AIzaSyAGBDrjMevenPxWNSPQSpK1P7kYnSGSoMk",authDomain:"pitu-gestao.firebaseapp.com",databaseURL:"https://pitu-gestao-default-rtdb.firebaseio.com",projectId:"pitu-gestao",storageBucket:"pitu-gestao.firebasestorage.app",messagingSenderId:"488924129318",appId:"1:488924129318:web:51375593299bb0bd825ee7"};
+    </script>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+<div id="tela-login" class="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+ <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
+  <div class="bg-rose-900 text-white px-6 py-6 text-center"><div class="mx-auto mb-3 w-14 h-14 rounded-2xl bg-amber-400 text-rose-950 flex items-center justify-center text-2xl"><i class="fa-solid fa-paw"></i></div><h1 class="text-2xl font-black">Casa de Rações Pitú</h1><p class="text-sm text-amber-200">Acesso ao sistema de gestão</p></div>
+  <form id="form-login" class="p-6 space-y-4">
+   <div><label class="block text-xs font-black text-slate-600 uppercase mb-1">E-mail</label><input id="login-email" type="email" required autocomplete="username" class="w-full px-4 py-3 bg-slate-50 border rounded-xl"></div>
+   <div><label class="block text-xs font-black text-slate-600 uppercase mb-1">Senha</label><div class="relative"><input id="login-senha" type="password" required autocomplete="current-password" class="w-full px-4 py-3 pr-12 bg-slate-50 border rounded-xl"><button type="button" id="btn-mostrar-senha" class="absolute inset-y-0 right-0 px-4" aria-label="Mostrar senha"><i class="fa-solid fa-eye"></i></button></div></div>
+   <p id="login-erro" class="hidden text-sm font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3"></p>
+   <button id="btn-entrar" type="submit" class="w-full bg-rose-800 text-amber-200 font-black py-3.5 rounded-xl"><i class="fa-solid fa-right-to-bracket"></i> Entrar</button>
+   <button id="btn-redefinir-senha" type="button" class="w-full text-xs font-bold text-rose-800">Esqueci minha senha</button>
+  </form>
+ </div>
+</div>
 
     <!-- ================= TELA DE AGENDAMENTO PÚBLICO (CLIENTE VIA LINK) ================= -->
     <div id="tela-cliente-agenda" class="hidden min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-4">
@@ -97,7 +116,7 @@
     </div>
 
     <!-- ================= SISTEMA PRINCIPAL (GESTÃO MULTI-UNIDADES) ================= -->
-    <div id="app-principal" class="flex-1 flex flex-col">
+    <div id="app-principal" class="hidden flex-1 flex flex-col">
 
         <!-- Cabeçalho Fixo da Unidade -->
         <header id="main-header" class="bg-rose-900 text-white shadow-md sticky top-0 z-50 border-b border-amber-500/30">
@@ -124,6 +143,7 @@
                     <button onclick="abrirModalFirebase()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 px-2.5 py-1.5 rounded-lg font-bold transition shadow-sm flex items-center gap-1">
                         <i class="fa-solid fa-cloud"></i> Nuvem
                     </button>
+<button onclick="sairDoSistema()" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-500 px-2.5 py-1.5 rounded-lg font-bold transition shadow-sm flex items-center gap-1"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
                     <button onclick="alterarSenhaAbasProtegidas()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 px-2.5 py-1.5 rounded-lg font-bold transition shadow-sm flex items-center gap-1">
                         <i class="fa-solid fa-key"></i> Senha Abas
                     </button>
@@ -2391,7 +2411,7 @@
 
             if (masterState.firebaseUrl) {
                 try {
-                    const url = masterState.firebaseUrl.replace(/\/$/, '') + '/pitu_gestao.json';
+                    const url = masterState.firebaseUrl.replace(/\/$/, '') + '/pitu_gestao.json' + await getFirebaseAuthQuery();
                     await fetch(url, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
@@ -2433,7 +2453,7 @@
 
             if (masterState.firebaseUrl) {
                 try {
-                    const url = masterState.firebaseUrl.replace(/\/$/, '') + '/pitu_gestao.json';
+                    const url = masterState.firebaseUrl.replace(/\/$/, '') + '/pitu_gestao.json' + await getFirebaseAuthQuery();
                     const resp = await fetch(url);
                     if (resp.ok) {
                         const cloudData = await resp.json();
@@ -2498,7 +2518,7 @@
         }
 
         // ================= INICIALIZAÇÃO =================
-        window.onload = async function() {
+        async function inicializarAplicacaoAutenticada() {
             await carregarDadosStorage();
 
             // Verifica se o link foi aberto no modo Agendamento de Cliente (?agendar=1)
@@ -3478,7 +3498,7 @@
 
             if (masterState.firebaseUrl) {
                 try {
-                    const url = masterState.firebaseUrl.replace(/\/$/, '') + '/pitu_gestao.json';
+                    const url = masterState.firebaseUrl.replace(/\/$/, '') + '/pitu_gestao.json' + await getFirebaseAuthQuery();
                     await fetch(url, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
@@ -6401,7 +6421,27 @@ Por favor, confirmar disponibilidade e prazo de entrega. Obrigado!`;
             };
             r.readAsText(f);
         }
-    </script>
+    
+          // ================= LOGIN FIREBASE =================
+          let appInicializadoAposLogin = false;
+          function mostrarErroLogin(msg){const e=document.getElementById('login-erro');e.textContent=msg;e.classList.remove('hidden');}
+          function mensagemErroAuth(c){return ({'auth/invalid-credential':'E-mail ou senha incorretos.','auth/wrong-password':'E-mail ou senha incorretos.','auth/user-not-found':'Usuário não encontrado.','auth/invalid-email':'E-mail inválido.','auth/too-many-requests':'Muitas tentativas. Aguarde alguns minutos.','auth/network-request-failed':'Falha de conexão.'})[c]||'Não foi possível entrar.';}
+          async function sairDoSistema(){await firebase.auth().signOut();}
+          async function iniciarAuthPitu(){
+            if(!firebase.apps.length) firebase.initializeApp(PITU_FIREBASE_CONFIG);
+            firebase.auth().onAuthStateChanged(async user=>{
+              const publico=new URLSearchParams(location.search).get('agendar')==='1';
+              if(publico){document.getElementById('tela-login').classList.add('hidden');await carregarDadosStorage();iniciarModoClienteAgenda(new URLSearchParams(location.search).get('unidade'));return;}
+              if(user){document.getElementById('tela-login').classList.add('hidden');document.getElementById('app-principal').classList.remove('hidden');if(!appInicializadoAposLogin){appInicializadoAposLogin=true;await inicializarAplicacaoAutenticada();}}
+              else{appInicializadoAposLogin=false;document.getElementById('app-principal').classList.add('hidden');document.getElementById('tela-login').classList.remove('hidden');}
+            });
+          }
+          document.getElementById('form-login').addEventListener('submit',async e=>{e.preventDefault();const b=document.getElementById('btn-entrar');b.disabled=true;try{await firebase.auth().signInWithEmailAndPassword(document.getElementById('login-email').value.trim(),document.getElementById('login-senha').value);}catch(x){mostrarErroLogin(mensagemErroAuth(x.code));}finally{b.disabled=false;}});
+          document.getElementById('btn-mostrar-senha').addEventListener('click',()=>{const e=document.getElementById('login-senha');e.type=e.type==='password'?'text':'password';});
+          document.getElementById('btn-redefinir-senha').addEventListener('click',async()=>{const email=document.getElementById('login-email').value.trim();if(!email){mostrarErroLogin('Informe o e-mail.');return;}try{await firebase.auth().sendPasswordResetEmail(email);alert('E-mail de redefinição enviado.');}catch(x){mostrarErroLogin(mensagemErroAuth(x.code));}});
+          window.addEventListener('load',iniciarAuthPitu);
+
+</script>
 
     <!-- ================= MODAL CUPOM NÃO FISCAL ================= -->
     <div id="modal-cupom-nao-fiscal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
